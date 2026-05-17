@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.ENV
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+proxy.json
+models.json
+classification.json
+journal.json
+claude-proxy-sessions.log
+docs/
+
+# Testing
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>claude-proxy</title>
+  <link rel="stylesheet" href="/__ui/style.css">
+  <script><!--THEME--></script>
+</head>
+<body class="index">
+  <header class="topbar">
+    <h1>claude-proxy</h1>
+    <div class="topbar-right">
+      <span id="conn" class="conn conn-reconnecting" aria-live="polite">● connecting</span>
+      <label class="toggle"><input type="checkbox" id="show-gpu"> GPU</label>
+      <label class="toggle"><input type="checkbox" id="show-system"> system</label>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme">🌓</button>
+      <details class="settings">
+        <summary aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </summary>
+        <div class="settings-panel">
+          <h2 class="settings-heading">Settings</h2>
+          <fieldset class="settings-section">
+            <legend>Display</legend>
+            <label>Session sort
+              <select id="pref-session-sort">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </label>
+            <label>Connection sort
+              <select id="pref-conn-sort">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </label>
+          </fieldset>
+          <fieldset class="settings-section">
+            <legend>Limits</legend>
+            <label>Max sessions
+              <input type="number" id="pref-max-sessions" min="1" step="1">
+            </label>
+            <label>Max conns / session
+              <input type="number" id="pref-max-conns" min="1" step="1">
+            </label>
+          </fieldset>
+        </div>
+      </details>
+      <form method="POST" action="/__ui/logout">
+        <button type="submit" class="logout">Log out</button>
+      </form>
+    </div>
+  </header>
+  <section id="status-bar" class="status-bar" aria-label="proxy status">
+    <span class="status-bar-empty">proxy status pending…</span>
+  </section>
+  <main>
+    <div class="telemetry-grid">
+      <section id="gpu-panel" class="telemetry-panel" hidden aria-label="GPU telemetry">
+        <h2>GPU</h2>
+        <div id="gpu-panel-body" class="telemetry-empty">GPU telemetry not available</div>
+      </section>
+      <section id="system-panel" class="telemetry-panel" hidden aria-label="system telemetry">
+        <h2>system</h2>
+        <div id="system-panel-body" class="telemetry-empty">System telemetry not available</div>
+      </section>
+    </div>
+    <div id="empty" class="empty">No activity yet</div>
+    <table id="activity" class="activity" hidden>
+      <thead>
+        <tr class="session-header">
+          <th> </th>
+          <th>session</th>
+          <th class="col-nowrap">connections</th>
+          <th class="col-nowrap">time range</th>
+          <th class="col-nowrap">time spent</th>
+          <th class="col-nowrap">bytes</th>
+          <th class="col-nowrap">tokens in</th>
+          <th class="col-nowrap">tokens out</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <footer id="state-legend" class="state-legend" aria-label="connection state legend"></footer>
+  </main>
+  <script type="module" src="/__ui/app.js"></script>
+</body>
+</html>

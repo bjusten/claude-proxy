@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>claude-proxy — sign in</title>
+  <link rel="stylesheet" href="/__ui/style.css">
+  <script><!--THEME--></script>
+  <script type="module">
+    import { initThemeToggle } from '/__ui/theme.js';
+    initThemeToggle();
+  </script>
+</head>
+<body class="login">
+  <main class="login-card">
+    <h1 class="login-title">claude-proxy</h1>
+    <p class="login-subtitle">Sign in to view proxy activity</p>
+    <!--ERROR-->
+    <form class="login-form" method="POST" action="/__ui/login">
+      <input type="hidden" name="csrf_token" value="<!--CSRF-TOKEN-->">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="off" placeholder="Enter your password" autofocus>
+      <button type="submit">SIGN IN</button>
+    </form>
+  </main>
+</body>
+</html>

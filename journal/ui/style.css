@@ -1,0 +1,813 @@
+/* Light is the default ("system" mode in a light OS, and explicit light).
+   Dark vars live in one place and are applied either by the system-media
+   query (system mode only) or by the explicit [data-theme="dark"] selector.
+   Selector specificity makes an explicit choice always win over the OS. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light dark;
+  --bg: #f6f6f7;
+  --fg: #1a1a1a;
+  --card: #ffffff;
+  --border: #d0d0d3;
+  --accent: #2962ff;
+  --error: #b00020;
+  --meter-track: rgba(0, 0, 0, 0.06);
+  --meter-green: #2f8a37;
+  --meter-yellow: #b07d00;
+  --meter-red: #c0282f;
+  --meter-label-color: #000;
+}
+
+:root[data-theme="dark"] {
+  --bg: #15171a;
+  --fg: #e6e6e6;
+  --card: #1f2125;
+  --border: #2c2f34;
+  --accent: #7f9cff;
+  --error: #ff6b78;
+  --meter-track: rgba(255, 255, 255, 0.06);
+  --meter-green: #5ed67a;
+  --meter-yellow: #e8c252;
+  --meter-red: #ff7a86;
+  --meter-label-color: #fff;
+}
+
+/* System mode only: follow the OS when no explicit theme is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #15171a;
+    --fg: #e6e6e6;
+    --card: #1f2125;
+    --border: #2c2f34;
+    --accent: #7f9cff;
+    --error: #ff6b78;
+    --meter-track: rgba(255, 255, 255, 0.06);
+    --meter-green: #5ed67a;
+    --meter-yellow: #e8c252;
+    --meter-red: #ff7a86;
+  }
+}
+
+/* Connection-state palette — one configurable set shared by the state dot,
+   the proxy-connection timeline and the legend. These are theme-independent
+   fallbacks; the proxy's operator-configured ui.state_colors are applied at
+   runtime by state-colors.js as inline custom properties on :root, which
+   override these. Keep in sync with journal/config.py state_colors. */
+:root {
+  --state-init: #9e9e9e;
+  --state-classifying: #9c27b0;
+  --state-queued: #ff9800;
+  --state-routing-request: #2196f3;
+  --state-routing-response: #ffc107;
+  --state-success: #4caf50;
+  --state-failure: #f44336;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body.login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+
+.login-card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 3rem 2.5rem 2.5rem;
+  width: 24rem;
+  max-width: 92vw;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04),
+              0 16px 48px -16px rgba(0, 0, 0, 0.22);
+}
+
+.login-title {
+  margin: 0 0 0.3rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.login-subtitle {
+  margin: 0 0 0;
+  font-size: 0.875rem;
+  opacity: 0.55;
+  font-weight: 400;
+}
+
+/* Vertical stack: label → input → button. */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2rem;
+}
+
+.login-form label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  margin-bottom: 0.5rem;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  font-size: 0.95rem;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.login-form input::placeholder { color: var(--fg); opacity: 0.35; }
+.login-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.login-form button {
+  margin-top: 1.5rem;
+  width: 100%;
+  padding: 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.08s ease, box-shadow 0.2s ease;
+}
+.login-form button:hover { filter: brightness(1.1); }
+.login-form button:active { transform: translateY(1px); }
+.login-form button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.login-card .error {
+  margin-top: 1.5rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--error) 25%, transparent);
+  border-radius: 12px;
+}
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--card); }
+.topbar h1 { margin: 0; font-size: 1rem; font-weight: 600; }
+.logout { padding: 0.35rem 0.7rem; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--fg); cursor: pointer; }
+
+main { padding: 1rem; }
+main:has(.login-card) { padding: 0; }
+.status { color: var(--fg); opacity: 0.8; }
+
+.topbar-right { display: flex; gap: 0.75rem; align-items: center; }
+.theme-toggle {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+.theme-toggle:hover { border-color: var(--accent); }
+
+/* Toggle labels */
+.toggle { font-size: 0.85rem; cursor: pointer; user-select: none; }
+.toggle input { margin-right: 0.25rem; }
+
+/* Status bar */
+.status-bar {
+  display: flex; gap: 0.75rem; align-items: center;
+  padding: 0.4rem 1rem; font-size: 0.8rem;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  opacity: 0.8;
+}
+.status-bar-empty { font-style: italic; opacity: 0.5; }
+.status-uptime { opacity: 0.6; }
+
+/* Telemetry panels */
+.telemetry-panel {
+  margin-bottom: 1rem; padding: 0.75rem;
+  background: var(--card); border: 1px solid var(--border); border-radius: 4px;
+  display: flex; align-items: flex-start; gap: 0.85rem;
+}
+/* `display: flex` above outranks the UA [hidden] rule, so scope the
+   hide here or the toggle checkboxes go dead and the panels stick on. */
+.telemetry-panel[hidden] { display: none; }
+.telemetry-panel h2 {
+  margin: 0; font-size: 0.85rem; font-weight: 600;
+  flex: 0 0 auto; min-width: 3.5em; opacity: 0.7;
+  padding-top: 0.15rem;
+}
+.telemetry-panel > div { flex: 1 1 auto; min-width: 0; }
+.telemetry-line { display: flex; gap: 0.5rem; font-size: 0.85rem; padding: 0.15rem 0; }
+.telemetry-line-key { opacity: 0.6; min-width: 6em; }
+.telemetry-line-val { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.telemetry-empty { opacity: 0.55; font-style: italic; padding: 0.5rem 0; }
+.gpu-card, .system-card { margin-bottom: 0.5rem; padding: 0.3rem 0; }
+
+/* Horizontal rows */
+.hrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.2rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+/* Horizontal chips (label: value inline) */
+.hrow-chip {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.hrow-chip-label {
+  opacity: 0.5;
+  font-size: 0.8rem;
+}
+
+.hrow-chip-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Push a chip to the far right of its row (aligns with bar end). */
+.hrow-chip-end { margin-left: auto; }
+
+.hrow-mount {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.conn {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.conn-live         { color: #2e7d32; }
+.conn-reconnecting { color: var(--error); }
+
+:root[data-theme="dark"] .conn-live { color: #6bcf7a; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .conn-live { color: #6bcf7a; }
+}
+
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  opacity: 0.6;
+}
+
+.activity {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+.activity th, .activity td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.activity th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  white-space: nowrap;
+  font-weight: 600;
+}
+.activity .col-nowrap, .activity td.col-nowrap { white-space: nowrap; }
+.activity tbody tr:hover { background: rgba(127, 156, 255, 0.08); }
+.activity td.dim { opacity: 0.45; }
+.activity tbody tr:not(.expansion) { cursor: pointer; }
+
+/* Expansion panel */
+.activity tr.expansion:hover { background: transparent; }
+.activity tr.expansion > td {
+  padding: 0;
+  background: rgba(127, 156, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+.exp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+.exp-section { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 0.6rem 0.75rem; }
+.exp-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.exp-empty { opacity: 0.55; font-style: italic; }
+.exp-loading { padding: 0.75rem 1rem; opacity: 0.6; }
+.exp-fetch-error { padding: 0.75rem 1rem; color: var(--error); }
+
+/* Timestamps table */
+.exp-ts-table { border-collapse: collapse; }
+.exp-ts-table td { padding: 0.15rem 0.75rem 0.15rem 0; vertical-align: top; }
+.exp-ts-phase { opacity: 0.7; }
+.exp-ts-rel { opacity: 0.55; }
+
+/* Routing key/value */
+.exp-kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.15rem 0.75rem; margin: 0; }
+.exp-kv dt { opacity: 0.7; }
+.exp-kv dd { margin: 0; word-break: break-all; }
+
+/* Headers (collapsible) */
+.exp-headers { margin-top: 0.25rem; }
+.exp-headers summary { cursor: pointer; opacity: 0.75; user-select: none; }
+.exp-headers summary::marker { color: var(--accent); }
+.exp-hdr-table { border-collapse: collapse; margin-top: 0.4rem; }
+.exp-hdr-table td { padding: 0.1rem 0.75rem 0.1rem 0; vertical-align: top; }
+.exp-hdr-key { opacity: 0.7; }
+.exp-hdr-val { word-break: break-all; }
+
+/* Body */
+.exp-body-label { margin-top: 0.5rem; opacity: 0.7; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.exp-pre {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Response meta line */
+.exp-response-meta { display: flex; gap: 0.75rem; margin-bottom: 0.25rem; }
+.exp-response-status, .exp-response-bytes { opacity: 0.85; }
+
+/* Error panel */
+.exp-error-panel {
+  border-color: var(--error);
+  background: rgba(176, 0, 32, 0.06);
+}
+:root[data-theme="dark"] .exp-error-panel { background: rgba(255, 107, 120, 0.08); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .exp-error-panel { background: rgba(255, 107, 120, 0.08); }
+}
+.exp-error-panel h3 { color: var(--error); opacity: 0.9; }
+.exp-error-kind { font-weight: 600; }
+.exp-error-message { margin-top: 0.25rem; }
+
+/* JSON tree */
+.exp-body-tree {
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  max-height: 32rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+.jtnode { line-height: 1.5; }
+.jt-header { display: inline-flex; align-items: baseline; gap: 0.3rem; max-width: 100%; }
+.jt-header.jt-clickable { cursor: pointer; }
+.jt-children {
+  margin-left: 1.1rem;
+  border-left: 1px dashed var(--border);
+  padding-left: 0.5rem;
+}
+.jt-chevron {
+  background: transparent;
+  border: 0;
+  padding: 0 0.1rem;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--accent);
+  cursor: pointer;
+}
+.jt-key { color: var(--accent); opacity: 0.85; }
+.jt-summary { opacity: 0.65; }
+.jt-value { white-space: pre-wrap; word-break: break-word; }
+.jt-string { color: #2e7d32; }
+.jt-null   { color: #888; font-style: italic; }
+.jt-bool   { color: #c25700; }
+.jt-number { color: #1769aa; }
+.jt-other  { opacity: 0.7; }
+:root[data-theme="dark"] .jt-string { color: #8bd5a3; }
+:root[data-theme="dark"] .jt-bool   { color: #f0a674; }
+:root[data-theme="dark"] .jt-number { color: #7fb6ff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .jt-string { color: #8bd5a3; }
+  :root:not([data-theme]) .jt-bool   { color: #f0a674; }
+  :root:not([data-theme]) .jt-number { color: #7fb6ff; }
+}
+.jt-copy, .jt-more {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg);
+  opacity: 0.4;
+  font-size: 0.75rem;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.jt-copy:hover, .jt-more:hover { opacity: 0.95; border-color: var(--border); }
+.jt-string-rest { white-space: pre-wrap; }
+
+/* Session-row and connection-row layout */
+.session-row td {
+  cursor: pointer;
+  user-select: none;
+  padding: 0.35rem 0.6rem;
+  border-top: 1px solid var(--border);
+}
+.session-row td.session-cell-caret {
+  width: 1ch;
+  text-align: center;
+  opacity: 0.75;
+}
+.session-row td.session-cell-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-row td.session-cell-count,
+.session-row td.session-cell-time_range,
+.session-row td.session-cell-bytes,
+.session-row td.session-cell-tokens_in,
+.session-row td.session-cell-tokens_out {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.session-row:hover td {
+  background: rgba(127, 156, 255, 0.12);
+}
+
+/* Nested per-session connection table */
+.session-conns-row:hover { background: transparent; }
+.session-conns-row > td {
+  padding: 0;
+  background: rgba(127, 156, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+.conn-table {
+  /* Full row width minus the indent — stays consistent whether or not a
+     connection inside it is deep-expanded (which used to force it wide). */
+  width: calc(100% - 1.75rem);
+  margin: 0.4rem 0 0.6rem 1.75rem;   /* the indent */
+  border: 1px solid var(--border);   /* the card */
+  border-radius: 4px;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  overflow: hidden;
+  table-layout: fixed;
+}
+.conn-table th,
+.conn-table td {
+  padding: 0.3rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.conn-table thead th {
+  /* Distinct from the conn rows beneath it (explicit requirement). */
+  background: rgba(127, 156, 255, 0.16);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+  position: static;            /* not sticky inside the nested table */
+}
+.conn-table tbody tr:hover { background: rgba(127, 156, 255, 0.08); }
+.conn-table tbody tr:last-child td { border-bottom: 0; }
+.conn-table .conn-row { cursor: pointer; }
+
+/* state (✓/✗/●) and active index read as glyphs/counters — centre them. */
+.conn-table td.conn-table-col-state,
+.conn-table td.conn-table-col-active { text-align: center; }
+
+/* Conn-table column widths.
+   table-layout:fixed IGNORES min-width and only honours `width`, and the
+   column never auto-grows to its content — so a width narrower than the
+   (uppercase, letter-spaced) header clips the header text. Each minimum
+   column is therefore sized from its HEADER label length. The table font
+   is monospace, so 1ch ≈ one header character; +2.2rem covers the 0.7rem
+   horizontal padding on each side plus letter-spacing slack. Width is set
+   on the <th> only: fixed layout takes column width from the first row.
+   The four flexible columns (path / model / destination / destination
+   model) are deliberately left WITHOUT a width — fixed layout then splits
+   the remaining table width *equally* among the unsized columns. */
+.conn-table th.conn-table-col-ts         { width: calc(12ch + 2.2rem); } /* fits the 12-char timestamp */
+.conn-table th.conn-table-col-state      { width: calc(5ch + 2.2rem); }  /* "STATE" */
+.conn-table th.conn-table-col-active     { width: calc(6ch + 2.2rem); }  /* "ACTIVE" */
+.conn-table th.conn-table-col-method     { width: calc(6ch + 2.2rem); }  /* "METHOD" */
+.conn-table th.conn-table-col-classified { width: calc(10ch + 2.2rem); } /* "CLASSIFIED" */
+.conn-table th.conn-table-col-status     { width: calc(7ch + 2.2rem); }  /* "STATUS" / ERROR pill */
+.conn-table th.conn-table-col-duration   { width: calc(8ch + 2.2rem); }  /* "DURATION" */
+.conn-table th.conn-table-col-bytes      { width: calc(7ch + 2.2rem); }  /* "BYTES" */
+.conn-table th.conn-table-col-tokens_in  { width: calc(9ch + 2.2rem); }  /* "TOKENS IN" */
+.conn-table th.conn-table-col-tokens_out { width: calc(10ch + 2.2rem); } /* "TOKENS OUT" */
+
+.conn-table th.conn-table-col-ts,
+.conn-table td.conn-table-col-ts,
+.conn-table th.conn-table-col-state,
+.conn-table td.conn-table-col-state,
+.conn-table th.conn-table-col-active,
+.conn-table td.conn-table-col-active,
+.conn-table th.conn-table-col-method,
+.conn-table td.conn-table-col-method,
+.conn-table th.conn-table-col-classified,
+.conn-table td.conn-table-col-classified,
+.conn-table th.conn-table-col-status,
+.conn-table td.conn-table-col-status,
+.conn-table th.conn-table-col-duration,
+.conn-table td.conn-table-col-duration,
+.conn-table th.conn-table-col-bytes,
+.conn-table td.conn-table-col-bytes,
+.conn-table th.conn-table-col-tokens_in,
+.conn-table td.conn-table-col-tokens_in,
+.conn-table th.conn-table-col-tokens_out,
+.conn-table td.conn-table-col-tokens_out {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Flexible columns: no `width` set on purpose — fixed layout divides the
+   leftover table width equally across these four. */
+.conn-table th.conn-table-col-path,
+.conn-table td.conn-table-col-path,
+.conn-table th.conn-table-col-original_model,
+.conn-table td.conn-table-col-original_model,
+.conn-table th.conn-table-col-destination_url,
+.conn-table td.conn-table-col-destination_url,
+.conn-table th.conn-table-col-new_model,
+.conn-table td.conn-table-col-new_model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Header rows */
+.activity thead th {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+/* Settings disclosure */
+.settings { position: relative; }
+.settings > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  opacity: 0.75;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.2s ease;
+}
+.settings > summary:hover { opacity: 1; background: var(--meter-track); }
+.settings[open] > summary {
+  opacity: 1;
+  background: var(--meter-track);
+  border-color: var(--accent);
+}
+.settings[open] > summary svg { transform: rotate(45deg); }
+.settings > summary svg { transition: transform 0.25s ease; }
+.settings > summary::-webkit-details-marker { display: none; }
+.settings-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  min-width: 17rem;
+  z-index: 10;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  animation: settings-pop 0.14s ease-out;
+}
+@keyframes settings-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.settings-heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.settings-section {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.settings-section legend {
+  padding: 0;
+  margin-bottom: 0.1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+}
+.settings-panel label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+.settings-panel input, .settings-panel select {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.settings-panel input { width: 4.5rem; text-align: right; }
+.settings-panel input:focus-visible,
+.settings-panel select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Soft status-code colours (green 2xx / blue 3xx / amber 4xx / red 5xx) ── */
+.status-2xx { color: #2e7d32; }
+.status-3xx { color: #1769aa; }
+.status-4xx { color: #9a6b00; }
+.status-5xx { color: var(--error); }
+.status-error { color: var(--error); font-weight: 600; }
+.status-pill {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-weight: 600;
+}
+:root[data-theme="dark"] .status-2xx { color: #6bcf7a; }
+:root[data-theme="dark"] .status-3xx { color: #7fb6ff; }
+:root[data-theme="dark"] .status-4xx { color: #e0b341; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .status-2xx { color: #6bcf7a; }
+  :root:not([data-theme]) .status-3xx { color: #7fb6ff; }
+  :root:not([data-theme]) .status-4xx { color: #e0b341; }
+}
+
+/* ── Conn-table token cells by share of context window (green/yellow/red) ── */
+.ctx-low  { color: #2e7d32; }
+.ctx-mid  { color: #9a6b00; }
+.ctx-high { color: var(--error); }
+:root[data-theme="dark"] .ctx-low  { color: #6bcf7a; }
+:root[data-theme="dark"] .ctx-mid  { color: #e0b341; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .ctx-low { color: #6bcf7a; }
+  :root:not([data-theme]) .ctx-mid { color: #e0b341; }
+}
+
+/* ── Timestamps timeline bar + legend ── */
+.exp-ts-timeline { display: flex; flex-direction: column; gap: 0.45rem; }
+.exp-ts-bar {
+  display: flex;
+  height: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+/* Segment + swatch fills are set inline from the shared --state-* palette
+   (see expand.js); no per-index colour rules here. */
+.exp-ts-seg { height: 100%; min-width: 2px; }
+.exp-ts-seg-only { width: 100%; }
+.exp-ts-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  font-size: 0.72rem;
+}
+.exp-ts-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+.exp-ts-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+.exp-ts-legend-dur { opacity: 0.6; }
+.exp-ts-legend-total { opacity: 0.55; font-style: italic; }
+
+/* ── Connection-state legend (page footer, horizontal) ── */
+.state-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 1.1rem;
+  margin: 1.25rem auto 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.72rem;
+  width: fit-content;
+  max-width: 100%;
+}
+.state-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.state-legend-mark { font-size: 0.85rem; line-height: 1; }
+.state-legend-text { opacity: 0.8; }
+
+/* ── Capacity meters (GPU / system panels) ── */
+.meter {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0.45rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+}
+.meter-label {
+  color: var(--meter-label-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meter-track {
+  position: relative;
+  height: 0.5rem;
+  background: var(--meter-track);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.meter-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.meter-green  { background: var(--meter-green);  box-shadow: 0 0 12px rgba(80, 220, 120, 0.25); }
+.meter-yellow { background: var(--meter-yellow); box-shadow: 0 0 12px rgba(240, 200, 80, 0.25); }
+.meter-red    { background: var(--meter-red);    box-shadow: 0 0 12px rgba(240, 90, 90, 0.30); }
+.meter-val {
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+/* ── Telemetry panels side-by-side when there's room ── */
+.telemetry-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+.telemetry-grid .telemetry-panel { margin-bottom: 1rem; }
+@media (min-width: 980px) {
+  .telemetry-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
