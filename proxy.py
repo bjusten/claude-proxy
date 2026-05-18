@@ -173,13 +173,29 @@ class LeastActiveSelector:
 
     def __init__(self):
         self._active: dict[str, list[int]] = {}
-        self._lock = threading.Lock()
+        # Condition (not a bare Lock) so released slots wake queued waiters
+        # immediately instead of via a lossy poll, and so we can enforce
+        # FIFO priority of queued connections over newer arrivals.
+        self._cond = threading.Condition()
+        self._next_ticket = 0
+        self._waiters: list[int] = []
+
+    @property
+    def _lock(self):
+        # Back-compat alias: the Condition's underlying lock behaves like the
+        # previous bare lock for the non-waiting code paths and tests.
+        return self._cond
+
+    def notify_free(self) -> None:
+        """Wake queued waiters to re-evaluate (a slot may have freed)."""
+        with self._cond:
+            self._cond.notify_all()
 
     def acquire(self, key: str, entries: list, global_tracking: bool = False,
                 wait_timeout: float = 0, on_queue=None) -> int:
         if global_tracking and wait_timeout > 0:
             return self._acquire_global(key, entries, wait_timeout, on_queue)
-        with self._lock:
+        with self._cond:
             if key not in self._active:
                 self._active[key] = [0] * len(entries)
             if global_tracking:
@@ -194,34 +210,77 @@ class LeastActiveSelector:
             return idx
 
     def _acquire_global(self, key: str, entries: list, wait_timeout: float, on_queue=None) -> int:
-        """Acquire entry with global URL tracking, waiting for a free URL if needed."""
+        """Acquire entry with global URL tracking, waiting for a free URL if needed.
+
+        Fairness: queued connections are served strictly FIFO and always take
+        priority over newer arrivals. A fresh caller may claim a free slot only
+        when no one is waiting; if anyone is queued it must take a ticket and
+        wait its turn. The freed slot is therefore reserved for the
+        longest-waiting connection rather than raced for by new connections.
+        """
+        import time
+
+        def _pick_and_take() -> int:
+            counts = [_url_tracker.get_active(e.get("url", e)) for e in entries]
+            i = min(range(len(entries)), key=lambda j: (counts[j], j))
+            _url_tracker.acquire(entries[i].get("url", entries[i]))
+            return i
+
         signalled = False
-        while True:
-            with self._lock:
-                if key not in self._active:
-                    self._active[key] = [0] * len(entries)
+        ticket: int | None = None
+        deadline = time.monotonic() + wait_timeout
+        with self._cond:
+            if key not in self._active:
+                self._active[key] = [0] * len(entries)
+            while True:
                 global_counts = [_url_tracker.get_active(e.get("url", e)) for e in entries]
-                if any(c == 0 for c in global_counts):
-                    # At least one URL is free — pick the minimum
-                    idx = min(range(len(entries)), key=lambda i: (global_counts[i], i))
-                    _url_tracker.acquire(entries[idx].get("url", entries[idx]))
-                    return idx
-            # All URLs are busy — release the lock and wait for a slot
-            if on_queue is not None and not signalled:
-                on_queue()
-                signalled = True
-            if not _url_tracker.wait_for_free_url(wait_timeout):
-                # Timeout expired — fall through to pick the minimum anyway
-                with self._lock:
-                    global_counts = [_url_tracker.get_active(e.get("url", e)) for e in entries]
-                    idx = min(range(len(entries)), key=lambda i: (global_counts[i], i))
-                    _url_tracker.acquire(entries[idx].get("url", entries[idx]))
+                free = any(c == 0 for c in global_counts)
+                # First in line: hold the front ticket, or nobody is queued.
+                first_in_line = (
+                    ticket == self._waiters[0] if self._waiters else ticket is None
+                )
+                if free and first_in_line:
+                    idx = _pick_and_take()
+                    if ticket is not None and ticket in self._waiters:
+                        self._waiters.remove(ticket)
+                    # Let the next queued waiter re-evaluate immediately.
+                    self._cond.notify_all()
                     return idx
 
+                # Must wait. Take a FIFO ticket once (monotonic → append keeps order).
+                if ticket is None:
+                    ticket = self._next_ticket
+                    self._next_ticket += 1
+                    self._waiters.append(ticket)
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    # Timeout — honour the original fallback: take the minimum
+                    # anyway so the request is not starved indefinitely.
+                    idx = _pick_and_take()
+                    if ticket in self._waiters:
+                        self._waiters.remove(ticket)
+                    self._cond.notify_all()
+                    return idx
+
+                # Mark the connection QUEUED exactly once, without holding the
+                # selector lock (the callback may touch the journal/bus).
+                if on_queue is not None and not signalled:
+                    signalled = True
+                    self._cond.release()
+                    try:
+                        on_queue()
+                    finally:
+                        self._cond.acquire()
+                    continue
+
+                self._cond.wait(remaining)
+
     def release(self, key: str, idx: int, url: str | None = None) -> None:
-        with self._lock:
+        with self._cond:
             if key in self._active:
                 self._active[key][idx] -= 1
+            self._cond.notify_all()
         if url is not None:
             _url_tracker.release(url)
 
@@ -271,6 +330,10 @@ class _UrlTracker:
                 self._count[key] = current - 1
             else:
                 self._count.pop(key, None)
+        # Wake queued waiters so the freed slot goes to the longest waiter.
+        # Done outside this lock to avoid an AB/BA deadlock with the selector
+        # condition (acquire holds the selector cond then takes this lock).
+        _rr.notify_free()
 
     def get_active(self, url: str) -> int:
         with self._lock:

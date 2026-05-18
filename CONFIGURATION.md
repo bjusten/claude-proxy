@@ -150,7 +150,8 @@ When `global_url_tracking` is enabled and every URL in a route's pool is current
 ```
 
 - Set to `0` to disable waiting — all URLs busy → pick the least-active anyway, immediately, without blocking.
-- The proxy polls every 100ms while waiting, so the effective latency after a release is at most ~100ms.
+- Waiting connections are woken the instant a slot is released (no polling delay).
+- **Queued connections have strict FIFO priority over newer arrivals.** A freed slot is reserved for the longest-waiting connection; a connection that arrives later cannot jump ahead of one already queued, even if it observes the free slot first.
 - If the timeout expires, the proxy picks the entry with the fewest active connections (tie-break by index) and proceeds — it will not block forever.
 
 ### `enable_session_logging` — log session ACQUIRE/RELEASE

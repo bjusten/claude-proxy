@@ -614,6 +614,68 @@ class TestGlobalUrlTracking(unittest.TestCase):
         t.join(timeout=5)
         self.assertTrue(len(results) == 1, f"waiter should have returned, got {results}")
 
+    def test_queued_connection_has_priority_over_newer_connection(self):
+        """A connection already queued must get the next freed slot before a
+        newer connection that arrives after the slot becomes free."""
+        import threading
+        import time
+        _url_tracker._count.clear()
+        urls = [
+            {"url": "http://a:8080", "new_model_name": "m1"},
+            {"url": "http://b:8080", "new_model_name": "m2"},
+        ]
+        # Saturate both URLs so the next acquire must queue.
+        idx_a = _rr.acquire("key-a", urls, global_tracking=True, wait_timeout=0)
+        idx_b = _rr.acquire("key-b", urls, global_tracking=True, wait_timeout=0)
+
+        queued_result = []
+        queued_marked = threading.Event()
+
+        def queued():
+            i = _rr.acquire(
+                "key-q", urls, global_tracking=True, wait_timeout=5,
+                on_queue=lambda: queued_marked.set(),
+            )
+            queued_result.append(i)
+
+        tq = threading.Thread(target=queued, daemon=True)
+        tq.start()
+        # Wait until the queued connection is registered as QUEUED and parked.
+        self.assertTrue(queued_marked.wait(2), "queued connection never queued")
+        time.sleep(0.15)
+
+        # Free exactly one slot — it is reserved for the queued connection.
+        _rr.release("key-a", idx_a, url=urls[idx_a]["url"])
+
+        # A newer connection arrives while the queued one is still waiting.
+        # It must NOT steal the slot reserved for the queued connection.
+        fresh_result = {}
+
+        def fresh():
+            i = _rr.acquire("key-f", urls, global_tracking=True, wait_timeout=5)
+            fresh_result["idx"] = i
+
+        tf = threading.Thread(target=fresh, daemon=True)
+        tf.start()
+        time.sleep(0.3)
+
+        fresh_blocked = "idx" not in fresh_result
+        tq.join(3)
+
+        # Let the newer connection finish so the thread exits cleanly.
+        _rr.release("key-b", idx_b, url=urls[idx_b]["url"])
+        tf.join(3)
+
+        self.assertEqual(
+            queued_result, [0],
+            "queued connection should have received the freed slot",
+        )
+        self.assertTrue(
+            fresh_blocked,
+            "newer connection stole the slot reserved for the queued "
+            "connection (no queue priority)",
+        )
+
     def test_without_global_tracking_both_pick_same(self):
         """Without the flag, same host:port can be picked by both keys."""
         config = {
