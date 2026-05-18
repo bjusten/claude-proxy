@@ -112,6 +112,32 @@ function classificationEnabled() {
   return typeof window !== 'undefined' && window.__classificationEnabled === true;
 }
 
+// Human-readable duration: <1s as `123ms`, else `1.23s`.
+function fmtDurationMs(n) {
+  return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(2)}s`;
+}
+
+// SUCCESS / FAILURE are the closed states; the live timer stops there
+// and the real duration_ms (received → completed) takes over.
+function isTerminalState(state) {
+  return state === 'SUCCESS' || state === 'FAILURE';
+}
+
+// Milliseconds elapsed since the connection entered the sending stage,
+// or null if it hasn't reached that stage yet / is already closed /
+// already has a final duration. Used both by the duration column render
+// and the per-second ticker that keeps it advancing between SSE updates.
+function liveElapsedMs(e) {
+  if (!e || !e.sending_ts) return null;
+  if (isTerminalState(e.state)) return null;
+  const ms = e.duration_ms;
+  if (ms !== null && ms !== undefined && ms !== '') return null;
+  const start = new Date(e.sending_ts).getTime();
+  if (!Number.isFinite(start)) return null;
+  const elapsed = Date.now() - start;
+  return elapsed >= 0 ? elapsed : null;
+}
+
 // Connection-level columns (shown inside an expanded session's sub-table).
 const ALL_COLUMNS = [
   { key: 'ts',              label: 'ts',          render: (e) => formatTs(e.ts) },
@@ -126,10 +152,13 @@ const ALL_COLUMNS = [
   { key: 'status',          label: 'status',      render: (e) => e.status },
   { key: 'duration',        label: 'duration',    render: (e) => {
     const ms = e.duration_ms;
-    if (ms === null || ms === undefined || ms === '') return null;
-    const n = Number(ms);
-    if (!Number.isFinite(n)) return null;
-    return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(2)}s`;
+    if (ms !== null && ms !== undefined && ms !== '') {
+      const n = Number(ms);
+      if (Number.isFinite(n)) return fmtDurationMs(n);
+    }
+    const live = liveElapsedMs(e);
+    if (live !== null) return fmtDurationMs(live);
+    return null;
   }},
   { key: 'bytes',           label: 'bytes',       render: (e) => e.bytes },
   { key: 'tokens_in',       label: 'tokens in',   render: (e) => renderTokenColumn(e, 'input') },
@@ -510,8 +539,33 @@ function collapseSession(state) {
   state.connsTbody = null;
 }
 
+// SSE only repaints a conn row when the backend pushes an update, but a
+// connection sits silent in the sending/awaiting stage while the upstream
+// model works. This ticker advances the duration cell of those in-flight
+// rows once a second so the timer visibly counts up until close.
+let liveTimer = null;
+
+function tickLiveDurations() {
+  for (const state of sessionMap.values()) {
+    if (!state.expanded) continue;
+    for (const e of state.children.values()) {
+      const elapsed = liveElapsedMs(e);
+      if (elapsed === null) continue;
+      const tr = state.childTrs.get(e.id);
+      if (!tr) continue;
+      const cell = tr.querySelector('.conn-table-col-duration');
+      if (!cell) continue;
+      cell.textContent = fmtDurationMs(elapsed);
+      cell.classList.remove('dim');
+    }
+  }
+}
+
 export function initSessionTable(tbodyEl) {
   tbody = tbodyEl;
+  if (liveTimer === null && typeof setInterval === 'function') {
+    liveTimer = setInterval(tickLiveDurations, 1000);
+  }
 }
 
 export function upsertConnection(entry) {

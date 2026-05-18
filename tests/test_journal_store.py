@@ -119,6 +119,7 @@ class TestJournalStoreShallowProjection(unittest.TestCase):
         self.assertEqual(shallow["id"], "c1")
         self.assertEqual(shallow["type"], "proxy_connection")
         self.assertEqual(shallow["ts"], "2026-05-14T00:00:00Z")
+        self.assertEqual(shallow["sending_ts"], "2026-05-14T00:00:01Z")
         self.assertEqual(shallow["session_id"], "sess-abc")
         self.assertEqual(shallow["method"], "POST")
         self.assertEqual(shallow["path"], "/v1/messages")
@@ -411,6 +412,25 @@ class TestShallowProjectDuration(unittest.TestCase):
             "response": {"status": 200},
         }
         shallow = _shallow_project(entry)
+        self.assertIsNone(shallow["duration_ms"])
+        self.assertIsNone(shallow["sending_ts"])
+
+    def test_proxy_connection_sending_ts_set_when_routed_before_close(self):
+        from journal.store import _shallow_project
+        entry = {
+            "id": "c-live",
+            "type": "proxy_connection",
+            "session_id": "s1",
+            "timestamps": {
+                "received": "2026-05-14T00:00:00Z",
+                "routed": "2026-05-14T00:00:02Z",
+            },
+            "incoming": {"method": "POST", "path": "/v1/messages"},
+            "routed": {"url": "http://u"},
+            "state": "ROUTING_RESPONSE",
+        }
+        shallow = _shallow_project(entry)
+        self.assertEqual(shallow["sending_ts"], "2026-05-14T00:00:02Z")
         self.assertIsNone(shallow["duration_ms"])
 
     def test_proxy_connection_duration_computed_with_milliseconds(self):

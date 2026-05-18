@@ -41,6 +41,7 @@ def _shallow_project(entry):
             "id": entry.get("id"),
             "type": "proxy_connection",
             "ts": timestamps.get("received"),
+            "sending_ts": timestamps.get("routed"),
             "session_id": entry.get("session_id"),
             "method": incoming.get("method"),
             "path": incoming.get("path"),
