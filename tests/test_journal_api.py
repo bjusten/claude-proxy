@@ -34,39 +34,37 @@ class TestJournalApiList(unittest.TestCase):
         self.assertEqual(decoded[0]["id"], "abc")
         self.assertEqual(decoded[0]["type"], "proxy_launched")
 
-    def test_get_entries_injects_active_sessions(self):
+    def test_entries_without_active_sessions_field(self):
+        """Entries written at request completion time carry their own
+        active_sessions field — no per-query injection needed.
+        """
         store = _make_store_with_proxy_launched()
-        status, _, body = dispatch("GET", "/__journal/entries", store,
-                                   active_count=12)
-        self.assertEqual(status, 200)
-        decoded = json.loads(body)
-        self.assertEqual(len(decoded), 1)
-        self.assertEqual(decoded[0]["active_sessions"], 12)
-
-    def test_get_entries_omits_active_sessions_when_not_provided(self):
-        store = _make_store_with_proxy_launched()
-        status, _, body = dispatch("GET", "/__journal/entries", store)
-        self.assertEqual(status, 200)
-        decoded = json.loads(body)
-        self.assertEqual(len(decoded), 1)
-        self.assertNotIn("active_sessions", decoded[0])
-
-    def test_get_entries_active_sessions_on_all_entries(self):
-        store = _make_store_with_proxy_launched(entry_id="abc")
         store.append(
             {
                 "id": "conn1",
                 "type": "proxy_connection",
                 "ts": "2026-05-14T01:00:00Z",
                 "state": "SUCCESS",
+                "active_sessions": 7,  # recorded at request finish
             }
         )
-        status, _, body = dispatch("GET", "/__journal/entries", store,
-                                   active_count=5)
+        status, _, body = dispatch("GET", "/__journal/entries", store)
+        self.assertEqual(status, 200)
         decoded = json.loads(body)
         self.assertEqual(len(decoded), 2)
-        self.assertEqual(decoded[0]["active_sessions"], 5)
-        self.assertEqual(decoded[1]["active_sessions"], 5)
+        self.assertEqual(decoded[1]["active_sessions"], 7)
+
+    def test_entries_preserve_active_sessions_from_proxy(self):
+        """Per-query active_count parameter is no longer accepted;
+        active_sessions must already be present in the entry.
+        """
+        store = _make_store_with_proxy_launched()
+        status, _, body = dispatch("GET", "/__journal/entries", store)
+        self.assertEqual(status, 200)
+        decoded = json.loads(body)
+        # Old entries (pre-fix) have no active_sessions — they fall
+        # back to entry_idx + 1 in the UI layer.
+        self.assertNotIn("active_sessions", decoded[0])
 
 
 class TestJournalApiGetById(unittest.TestCase):

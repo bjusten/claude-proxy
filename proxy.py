@@ -918,6 +918,10 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
                 _rr.release(routing_key, entry_idx)
                 if self.proxy_settings.get("global_url_tracking", False):
                     _url_tracker.release(destination_url)
+            if journal_entry_id is not None:
+                self.journal_store.update(journal_entry_id, {
+                    "active_sessions": _active_sessions._count,
+                })
             _active_sessions.dec()
             if self.proxy_settings.get("enable_session_logging", False):
                 _session_logger.info(
@@ -955,7 +959,6 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
         status, headers, body = journal_api.dispatch(
             self.command, self.path, self.journal_store,
             gpu_provider=gpu_provider, system_provider=system_provider,
-            active_count=_active_sessions._count,
         )
         self.send_response(status)
         for k, v in headers.items():

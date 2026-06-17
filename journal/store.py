@@ -56,6 +56,7 @@ def _shallow_project(entry):
             "bytes": response.get("bytes") if response else None,
             "tokens": entry.get("tokens"),
             "state": entry.get("state"),
+            "active_sessions": entry.get("active_sessions"),
         }
     return dict(entry)
 
