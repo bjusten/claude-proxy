@@ -955,6 +955,7 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
         status, headers, body = journal_api.dispatch(
             self.command, self.path, self.journal_store,
             gpu_provider=gpu_provider, system_provider=system_provider,
+            active_count=_active_sessions._count,
         )
         self.send_response(status)
         for k, v in headers.items():

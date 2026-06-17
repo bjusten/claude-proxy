@@ -34,6 +34,40 @@ class TestJournalApiList(unittest.TestCase):
         self.assertEqual(decoded[0]["id"], "abc")
         self.assertEqual(decoded[0]["type"], "proxy_launched")
 
+    def test_get_entries_injects_active_sessions(self):
+        store = _make_store_with_proxy_launched()
+        status, _, body = dispatch("GET", "/__journal/entries", store,
+                                   active_count=12)
+        self.assertEqual(status, 200)
+        decoded = json.loads(body)
+        self.assertEqual(len(decoded), 1)
+        self.assertEqual(decoded[0]["active_sessions"], 12)
+
+    def test_get_entries_omits_active_sessions_when_not_provided(self):
+        store = _make_store_with_proxy_launched()
+        status, _, body = dispatch("GET", "/__journal/entries", store)
+        self.assertEqual(status, 200)
+        decoded = json.loads(body)
+        self.assertEqual(len(decoded), 1)
+        self.assertNotIn("active_sessions", decoded[0])
+
+    def test_get_entries_active_sessions_on_all_entries(self):
+        store = _make_store_with_proxy_launched(entry_id="abc")
+        store.append(
+            {
+                "id": "conn1",
+                "type": "proxy_connection",
+                "ts": "2026-05-14T01:00:00Z",
+                "state": "SUCCESS",
+            }
+        )
+        status, _, body = dispatch("GET", "/__journal/entries", store,
+                                   active_count=5)
+        decoded = json.loads(body)
+        self.assertEqual(len(decoded), 2)
+        self.assertEqual(decoded[0]["active_sessions"], 5)
+        self.assertEqual(decoded[1]["active_sessions"], 5)
+
 
 class TestJournalApiGetById(unittest.TestCase):
     def test_get_entry_by_id_returns_200_and_full_entry(self):

@@ -142,7 +142,7 @@ function liveElapsedMs(e) {
 const ALL_COLUMNS = [
   { key: 'ts',              label: 'ts',          render: (e) => formatTs(e.ts) },
   { key: 'state',           label: 'state',       render: (e) => e.state },
-  { key: 'active',          label: 'active',      render: (e) => (e.entry_idx != null && e.entry_idx >= 0) ? e.entry_idx + 1 : null },
+  { key: 'active',          label: 'active',      render: (e) => e.active_sessions ?? (e.entry_idx != null && e.entry_idx >= 0 ? e.entry_idx + 1 : null) },
   { key: 'method',          label: 'method',      render: (e) => e.method },
   { key: 'path',            label: 'path',        render: (e) => e.path },
   { key: 'original_model',  label: 'model',       render: (e) => e.original_model },

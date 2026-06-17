@@ -33,9 +33,13 @@ def _dumps(obj):
     return json.dumps(obj, default=_json_default).encode("utf-8")
 
 
-def dispatch(command, path, store, gpu_provider=None, system_provider=None):
+def dispatch(command, path, store, gpu_provider=None, system_provider=None, active_count=None):
     if command == "GET" and path == "/__journal/entries":
-        body = _dumps(store.list_shallow())
+        entries = store.list_shallow()
+        if active_count is not None:
+            for e in entries:
+                e["active_sessions"] = active_count
+        body = _dumps(entries)
         return 200, dict(JSON_HEADERS), body
 
     if command == "GET" and path.startswith(_ENTRIES_PREFIX):
