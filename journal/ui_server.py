@@ -34,7 +34,7 @@ _ASSET_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{3,8}$")
 _DEFAULT_STATE_COLORS = {
     "INIT": "#9e9e9e", "CLASSIFYING": "#9c27b0", "QUEUED": "#ff9800",
-    "ROUTING_REQUEST": "#2196f3", "ROUTING_RESPONSE": "#ffc107",
+    "ROUTING_REQUEST": "#2196f3", "ROUTING_RESPONSE": "#3f51b5",
     "SUCCESS": "#4caf50", "FAILURE": "#f44336",
 }
 

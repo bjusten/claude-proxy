@@ -56,7 +56,7 @@ STATE_CLASSIFYING = "CLASSIFYING"
 STATE_QUEUED = "QUEUED"
 # ROUTING is split into two phases so the UI can distinguish "sending the
 # proxied request" (blue) from "request sent, awaiting the upstream
-# response" (yellow). ROUTING_REQUEST is set once the destination is
+# response" (indigo). ROUTING_REQUEST is set once the destination is
 # resolved and the request is being built/dispatched; ROUTING_RESPONSE is
 # set immediately before we block on the upstream response.
 STATE_ROUTING_REQUEST = "ROUTING_REQUEST"

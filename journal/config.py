@@ -39,7 +39,7 @@ DEFAULT_CONFIG = {
             "CLASSIFYING": "#9c27b0",      # purple — classifying the request
             "QUEUED": "#ff9800",           # orange — queued, resolving destination
             "ROUTING_REQUEST": "#2196f3",  # blue   — sending the proxied request
-            "ROUTING_RESPONSE": "#ffc107", # yellow — awaiting the proxied response
+            "ROUTING_RESPONSE": "#3f51b5", # indigo — awaiting the proxied response
             "SUCCESS": "#4caf50",          # green  — successfully proxied
             "FAILURE": "#f44336",          # red    — error / failure
         },

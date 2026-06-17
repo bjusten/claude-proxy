@@ -104,50 +104,117 @@ const SEG_BY_END_PHASE = {
   response_completed: { label: 'response',    state: 'ROUTING_RESPONSE' },
 };
 
-// { label, fill } for the segment ending at `toPhase`. Full state
-// colour (no transparency) so the bar matches the dot exactly.
-function segInfo(toPhase) {
-  const def = SEG_BY_END_PHASE[toPhase] || { label: toPhase, state: 'INIT' };
-  return { label: def.label, fill: stateColor(def.state) };
+// SUCCESS / FAILURE are closed: the final timestamp is recorded, so no
+// live segment is appended.
+function isTerminalState(state) {
+  return state === 'SUCCESS' || state === 'FAILURE';
 }
 
-function renderTimestamps(timestamps, entry) {
-  // Collect the phases that actually fired, in canonical order.
+// The trailing, still-open segment for an in-flight connection ends at the
+// next timestamp the backend will write. We derive that *next end phase*
+// from the current state plus which timestamps already exist, then reuse
+// SEG_BY_END_PHASE — so the growing segment is laballed and coloured
+// exactly as it will be once it closes (no relabel/recolour snap when the
+// timestamp lands).
+//
+// ROUTING_RESPONSE is special: the proxy holds that one state across two
+// distinct gaps — the wait for the first response byte (ends at
+// `response_started`, shown as 'request': connection open + send + the
+// model's time-to-first-token) and the body transfer (ends at
+// `response_completed`, shown as 'response': the model streaming its
+// answer). They are told apart by whether `response_started` has arrived.
+// For a non-streaming upstream the first byte only comes once generation
+// is complete, so the whole wait falls into the 'request' gap — a
+// measurement limitation of buffered responses, not a labelling bug.
+function liveEndPhase(state, recorded) {
+  switch (state) {
+    case 'CLASSIFYING':     return 'classified';
+    case 'QUEUED':          return 'routed';
+    case 'ROUTING_REQUEST': return 'routed';
+    case 'ROUTING_RESPONSE':
+      return recorded.has('response_started') ? 'response_completed' : 'response_started';
+    default:                return null; // INIT / unknown: no recorded end phase yet
+  }
+}
+
+// Pure timeline model — exported for unit testing. Returns null when no
+// phase has fired yet. `closed` are the recorded phase-to-phase gaps;
+// `liveSeg` (or null) is the open gap from the last recorded timestamp to
+// `nowMs` for the still-running state. `nowMs` is injectable so tests are
+// deterministic; production passes Date.now().
+export function timelineModel(timestamps, entry, nowMs) {
   const points = [];
+  const recorded = new Set();
   for (const phase of PHASES) {
     const ts = timestamps && timestamps[phase];
     if (!ts) continue;
     const t = Date.parse(ts);
     if (Number.isNaN(t)) continue;
+    recorded.add(phase);
     points.push({ phase, ts, t });
   }
-  if (points.length === 0) {
-    return el('div', { className: 'exp-empty', text: '<no timestamps>' });
+  if (points.length === 0) return null;
+
+  const closed = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const def = SEG_BY_END_PHASE[points[i + 1].phase]
+      || { label: points[i + 1].phase, state: 'INIT' };
+    closed.push({ label: def.label, ms: points[i + 1].t - points[i].t, state: def.state });
   }
 
-  const wrap = el('div', { className: 'exp-ts-timeline' });
-  const total = points[points.length - 1].t - points[0].t;
+  const firstT = points[0].t;
+  const lastT = points[points.length - 1].t;
+  const st = entry && entry.state;
+  const endPhase = (st && !isTerminalState(st)) ? liveEndPhase(st, recorded) : null;
+  const liveDef = endPhase ? SEG_BY_END_PHASE[endPhase] : null;
+  let liveSeg = null;
+  if (liveDef) {
+    const now = typeof nowMs === 'number' ? nowMs : Date.now();
+    liveSeg = { label: liveDef.label, ms: Math.max(0, now - lastT), state: liveDef.state, live: true };
+  }
+
+  return {
+    firstPhase: points[0].phase,
+    firstTs: points[0].ts,
+    firstT,
+    lastT,
+    closed,
+    liveSeg,
+  };
+}
+
+// Rebuild a timeline wrapper's bar + legend from its stashed entry. Called
+// on first render and once a second by the ticker so the live segment
+// grows in place. Returns true while the connection is still in flight
+// (so the ticker keeps it registered).
+function layoutTimeline(wrap) {
+  const { timestamps, entry } = wrap._tl || {};
+  const model = timelineModel(timestamps, entry);
+  while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+  if (!model) {
+    wrap.appendChild(el('div', { className: 'exp-empty', text: '<no timestamps>' }));
+    return false;
+  }
+
+  const segs = model.liveSeg ? model.closed.concat(model.liveSeg) : model.closed;
+  const end = model.liveSeg ? model.lastT + model.liveSeg.ms : model.lastT;
+  const total = end - model.firstT;
 
   const bar = el('div', { className: 'exp-ts-bar' });
-  const segs = []; // { label, ms, fill }
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const ms = b.t - a.t;
-    const { label, fill } = segInfo(b.phase);
-    const pct = total > 0 ? (ms / total) * 100 : 100 / (points.length - 1);
-    const seg = el('div', { className: 'exp-ts-seg' });
-    seg.style.width = `${pct}%`;
-    seg.style.background = fill;
-    seg.title = `${label}: ${formatGap(ms)}`;
-    bar.appendChild(seg);
-    segs.push({ label, ms, fill });
-  }
   if (segs.length === 0) {
     // Single phase only — render a full-width INIT marker bar.
     const only = el('div', { className: 'exp-ts-seg exp-ts-seg-only' });
     only.style.background = stateColor('INIT');
     bar.appendChild(only);
+  } else {
+    for (const s of segs) {
+      const pct = total > 0 ? (s.ms / total) * 100 : 100 / segs.length;
+      const seg = el('div', { className: 'exp-ts-seg' + (s.live ? ' exp-ts-seg-live' : '') });
+      seg.style.width = `${pct}%`;
+      seg.style.backgroundColor = stateColor(s.state);
+      seg.title = `${s.label}: ${formatGap(s.ms)}${s.live ? '…' : ''}`;
+      bar.appendChild(seg);
+    }
   }
   wrap.appendChild(bar);
 
@@ -157,21 +224,56 @@ function renderTimestamps(timestamps, entry) {
     sw.style.background = stateColor('INIT');
     legend.appendChild(el('span', { className: 'exp-ts-legend-item' }, sw,
       el('span', { className: 'exp-ts-legend-text',
-        text: `${points[0].phase} @ ${points[0].ts}` }),
+        text: `${model.firstPhase} @ ${model.firstTs}` }),
     ));
   } else {
     for (const s of segs) {
       const sw = el('span', { className: 'exp-ts-swatch' });
-      sw.style.background = s.fill;
+      sw.style.background = stateColor(s.state);
       legend.appendChild(el('span', { className: 'exp-ts-legend-item' }, sw,
         el('span', { className: 'exp-ts-legend-text', text: s.label }),
-        el('span', { className: 'exp-ts-legend-dur', text: formatGap(s.ms) }),
+        el('span', { className: 'exp-ts-legend-dur',
+          text: formatGap(s.ms) + (s.live ? '…' : '') }),
       ));
     }
     legend.appendChild(el('span', { className: 'exp-ts-legend-total',
-      text: `total ${formatGap(total)}` }));
+      text: `total ${formatGap(total)}${model.liveSeg ? '…' : ''}` }));
   }
   wrap.appendChild(legend);
+  return !!model.liveSeg;
+}
+
+// In-flight timelines re-layout once a second so the open segment visibly
+// grows between SSE updates — the connection sits silent in the
+// sending/awaiting stage while the upstream model works, mirroring the
+// duration column's live ticker in session-table.js.
+const liveTimelines = new Set();
+let timelineTicker = null;
+
+function ensureTimelineTicker() {
+  if (timelineTicker !== null || typeof setInterval !== 'function') return;
+  timelineTicker = setInterval(tickTimelines, 1000);
+}
+
+function tickTimelines() {
+  for (const wrap of liveTimelines) {
+    // Dropped from the DOM (collapsed / replaced by a refresh) — stop ticking.
+    if (!wrap.isConnected) {
+      liveTimelines.delete(wrap);
+      continue;
+    }
+    if (!layoutTimeline(wrap)) liveTimelines.delete(wrap);
+  }
+}
+
+function renderTimestamps(timestamps, entry) {
+  const wrap = el('div', { className: 'exp-ts-timeline' });
+  wrap._tl = { timestamps, entry };
+  const live = layoutTimeline(wrap);
+  if (live) {
+    liveTimelines.add(wrap);
+    ensureTimelineTicker();
+  }
   return wrap;
 }
 

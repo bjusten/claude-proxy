@@ -185,7 +185,7 @@ class TestJournalConfigUi(unittest.TestCase):
                     "CLASSIFYING": "#9c27b0",
                     "QUEUED": "#ff9800",
                     "ROUTING_REQUEST": "#2196f3",
-                    "ROUTING_RESPONSE": "#ffc107",
+                    "ROUTING_RESPONSE": "#3f51b5",
                     "SUCCESS": "#4caf50",
                     "FAILURE": "#f44336",
                 },
@@ -312,7 +312,7 @@ class TestJournalConfigStateColors(unittest.TestCase):
         cfg = load_config(os.path.join(d, "journal.json"))
         self.assertEqual(cfg["ui"]["state_colors"], {
             "INIT": "#9e9e9e", "CLASSIFYING": "#9c27b0", "QUEUED": "#ff9800",
-            "ROUTING_REQUEST": "#2196f3", "ROUTING_RESPONSE": "#ffc107",
+            "ROUTING_REQUEST": "#2196f3", "ROUTING_RESPONSE": "#3f51b5",
             "SUCCESS": "#4caf50", "FAILURE": "#f44336",
         })
 

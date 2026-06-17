@@ -299,7 +299,7 @@ Optional and **disabled by default**. When enabled, the proxy keeps an in-memory
       "CLASSIFYING": "#9c27b0",
       "QUEUED": "#ff9800",
       "ROUTING_REQUEST": "#2196f3",
-      "ROUTING_RESPONSE": "#ffc107",
+      "ROUTING_RESPONSE": "#3f51b5",
       "SUCCESS": "#4caf50",
       "FAILURE": "#f44336"
     }
@@ -353,7 +353,7 @@ other state renders as a filled dot in its color.
 | `CLASSIFYING` | `#9c27b0` (purple) | Request is being processed through classification. |
 | `QUEUED` | `#ff9800` (orange) | Passed classification; resolving destination — all destination models busy, waiting for one to free (global URL tracking). |
 | `ROUTING_REQUEST` | `#2196f3` (blue) | Destination resolved; building and sending the proxied request. |
-| `ROUTING_RESPONSE` | `#ffc107` (yellow) | Request sent; awaiting the full upstream response. |
+| `ROUTING_RESPONSE` | `#3f51b5` (indigo) | Request sent; awaiting the full upstream response. |
 | `SUCCESS` | `#4caf50` (green) | Delivered a `2xx`/`3xx` response; completed successfully. |
 | `FAILURE` | `#f44336` (red) | Delivered `≥ 400`, or an error occurred (connection/timeout/exception). |
 
