@@ -370,6 +370,18 @@ main:has(.login-card) { padding: 0; }
 .exp-response-meta { display: flex; gap: 0.75rem; margin-bottom: 0.25rem; }
 .exp-response-status, .exp-response-bytes { opacity: 0.85; }
 
+/* Assembled streaming response: the reconstructed final message shown in
+   place of the raw per-token SSE event dump. The raw stream and any reasoning
+   track stay available behind collapsed toggles. */
+.exp-assembled-meta { margin-top: 0.4rem; opacity: 0.6; font-size: 0.72rem; }
+.exp-assembled-reasoning, .exp-assembled-raw { margin-top: 0.4rem; }
+.exp-assembled-reasoning > summary,
+.exp-assembled-raw > summary {
+  cursor: pointer; opacity: 0.75; user-select: none; font-size: 0.78rem;
+}
+.exp-assembled-reasoning > summary::marker,
+.exp-assembled-raw > summary::marker { color: var(--accent); }
+
 /* Error panel */
 .exp-error-panel {
   border-color: var(--error);

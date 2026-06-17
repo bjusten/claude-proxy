@@ -6,8 +6,10 @@
 // envelopes, optional error panel. Re-click collapses the panel.
 //
 // Bodies render as a collapsible JSON tree when they parse as JSON,
-// otherwise as <pre> text (SSE streams, HTML error pages). Headers
-// render as a collapsible <details> key/value table.
+// otherwise as <pre> text (HTML error pages). A streaming response body —
+// captured as a raw `data: {...}` SSE event stream — is reassembled into the
+// finished message, with the raw stream kept behind a collapsed toggle.
+// Headers render as a collapsible <details> key/value table.
 
 import { renderNode } from './json-tree.js';
 import { stateColor } from './state-colors.js';
@@ -353,6 +355,96 @@ function renderBody(body, { expanded = false } = {}) {
   }
 }
 
+// Reassemble an OpenAI-style chat-completion SSE stream into the finished
+// message. Streaming responses are journaled as the raw event stream — one
+// `data: {...}` frame per token — which renders as an unreadable wall of
+// chunks. This concatenates the per-token deltas back into the final answer.
+// Returns null when *str* isn't a recognizable chat-completion event stream,
+// so the caller falls back to the normal JSON-tree / <pre> rendering.
+//
+// Exported for unit testing.
+export function parseSSEStream(str) {
+  if (typeof str !== 'string' || str.indexOf('data:') === -1) return null;
+
+  let content = '';
+  let reasoning = '';
+  let finishReason = null;
+  let frames = 0;     // `data:` frames that parsed as JSON
+  let badFrames = 0;  // frames that failed to parse (e.g. a truncated tail)
+  let sawChoices = false;
+
+  for (const line of str.split(/\r?\n/)) {
+    const m = /^data:\s?(.*)$/.exec(line);
+    if (!m) continue;
+    const payload = m[1].trim();
+    if (payload === '' || payload === '[DONE]') continue;
+    let obj;
+    try { obj = JSON.parse(payload); }
+    catch (_) { badFrames++; continue; }
+    frames++;
+    const choices = Array.isArray(obj.choices) ? obj.choices : [];
+    if (choices.length) sawChoices = true;
+    for (const ch of choices) {
+      const delta = ch.delta || {};
+      if (typeof delta.content === 'string') content += delta.content;
+      if (typeof delta.reasoning_content === 'string') reasoning += delta.reasoning_content;
+      if (typeof ch.text === 'string') content += ch.text; // legacy completions
+      if (ch.finish_reason) finishReason = ch.finish_reason;
+    }
+  }
+
+  // Only claim the body when it actually looked like a chat-completion
+  // stream — at least one frame carrying a `choices` array.
+  if (!sawChoices) return null;
+
+  const truncated = badFrames > 0 || /\[\.\.\. truncated\]/.test(str);
+  return { content, reasoning, finishReason, frames, truncated };
+}
+
+// Render a reassembled stream: the final answer up front, with reasoning and
+// the original raw event stream tucked into collapsed toggles so the default
+// view is just the readable message.
+function renderAssembledStream(sse, rawStr) {
+  const wrap = el('div', { className: 'exp-assembled' });
+
+  if (sse.content) {
+    wrap.appendChild(el('pre', { className: 'exp-pre exp-assembled-content', text: sse.content }));
+  } else {
+    wrap.appendChild(el('div', { className: 'exp-empty', text: '<no assistant content>' }));
+  }
+
+  // Reasoning models (e.g. Qwen) stream a separate reasoning_content track.
+  if (sse.reasoning) {
+    const d = el('details', { className: 'exp-assembled-reasoning' });
+    d.appendChild(el('summary', { text: 'reasoning' }));
+    d.appendChild(el('pre', { className: 'exp-pre', text: sse.reasoning }));
+    wrap.appendChild(d);
+  }
+
+  const bits = [`assembled from ${sse.frames} streamed event${sse.frames === 1 ? '' : 's'}`];
+  if (sse.finishReason) bits.push(`finish: ${sse.finishReason}`);
+  if (sse.truncated) bits.push('stream truncated in journal');
+  wrap.appendChild(el('div', { className: 'exp-assembled-meta', text: bits.join(' · ') }));
+
+  // The raw event stream stays available — collapsed — for debugging.
+  const raw = el('details', { className: 'exp-assembled-raw' });
+  raw.appendChild(el('summary', { text: 'raw stream' }));
+  raw.appendChild(el('pre', { className: 'exp-pre', text: rawStr }));
+  wrap.appendChild(raw);
+
+  return wrap;
+}
+
+// Response bodies that are SSE streams reassemble into the final message;
+// everything else (plain JSON, HTML error pages) renders normally.
+function renderResponseBody(env, opts) {
+  if (env && typeof env.body === 'string') {
+    const sse = parseSSEStream(env.body);
+    if (sse) return renderAssembledStream(sse, env.body);
+  }
+  return renderBody(env ? env.body : undefined, opts);
+}
+
 function headersDetails(headers) {
   const d = el('details', { className: 'exp-headers' });
   d.appendChild(el('summary', { text: 'headers' }));
@@ -416,8 +508,9 @@ function renderResponse(env, { autoExpandBody = true } = {}) {
   // immediately visible without having to click to expand the tree.
   // Exception: classification-request entries keep the tree collapsed —
   // the response is a one-word category, not payload worth pre-expanding.
-  const rawBody = renderBody(env.body, { expanded: autoExpandBody });
-  section.appendChild(rawBody);
+  // Streaming SSE bodies are reassembled into the finished message instead
+  // of dumping the per-token event stream (see renderResponseBody).
+  section.appendChild(renderResponseBody(env, { expanded: autoExpandBody }));
   return section;
 }
 
