@@ -107,11 +107,37 @@ class TestAuthStorePrehashedPassword(unittest.TestCase):
         self.assertIsNotNone(store.login("secret"))
         self.assertIsNone(store.login("wrong"))
 
-    def test_plaintext_config_is_still_hashed(self):
-        """Plaintext password config should still be hashed internally."""
+    def test_sha256_hash_matches_when_bcrypt_available(self):
+        """Sha256-stored hash must verify correctly even when bcrypt is installed.
+
+        Regression: _hash_password prefers bcrypt, so hashing 'blah' via
+        _hash_password() would produce a bcrypt hash that never matches a
+        sha256-stored digest. _check_password must compute sha256 directly.
+        """
+        import hashlib
+
+        digest = hashlib.sha256("blah".encode()).hexdigest()
+        prehashed = f"$hash:{digest}"
+        store = AuthStore(prehashed, ttl_seconds=60)
+        self.assertIsNotNone(store.login("blah"))
+        self.assertIsNone(store.login("blahx"))
+        self.assertIsNone(store.login("BLAH"))
+
+    def test_plain_sha256_hash_without_prefix(self):
+        """Plain sha256 hex digest (no $hash: prefix) should also work."""
+        import hashlib
+
+        digest = hashlib.sha256("secret".encode()).hexdigest()
+        store = AuthStore(digest, ttl_seconds=60)
+        self.assertIsNotNone(store.login("secret"))
+        self.assertIsNone(store.login("wrong"))
+
+    def test_plaintext_config_stored_as_is(self):
+        """Plaintext password config should be stored as-is and matched directly."""
         store = AuthStore("secret", ttl_seconds=60)
         self.assertTrue(store.login("secret"))
-        self.assertFalse(store._password_hash.startswith("secret"))
+        self.assertEqual(store._password_hash, "secret")
+        self.assertFalse(store.login("wrong"))
 
 
 class TestAuthStoreLogout(unittest.TestCase):

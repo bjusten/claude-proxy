@@ -8,6 +8,14 @@ derive a one-way hash.  The hash is stored in journal.json, and login
 compares the submitted-password hash against the stored hash.  This avoids
 storing plaintext credentials on disk.
 
+Auto-detection: the stored value is tried as bcrypt first (if it starts
+with ``$2b$`` or ``$2a$``), then sha256 (stripping an optional ``$hash:``
+prefix), then as a plaintext literal.  This means you can store any of:
+
+- ``$2b$...`` or ``$hash:$2b$...`` — bcrypt hash
+- ``8b7df143...`` or ``$hash:8b7df143...`` — sha256 hex digest
+- ``plaintext`` — literal password (not recommended for production)
+
 Rate limiting: failed login attempts are tracked per source IP with a
 sliding window (10 attempts per 60s). Once exceeded, further attempts
 are rejected until the window slides below the threshold.
@@ -16,6 +24,7 @@ CSRF tokens: opaque random strings generated per login page GET and
 validated on the corresponding POST.
 """
 
+import hashlib
 import hmac
 import secrets
 import threading
@@ -25,63 +34,55 @@ try:
     import bcrypt  # noqa: F401
     _USE_BCRYPT = True
 except ImportError:
-    import hashlib  # noqa: F401
     _USE_BCRYPT = False
 
 
-def _hash_password(plaintext):
-    """Hash *plaintext* using bcrypt (preferred) or sha256 (fallback).
+def _check_password(stored_password, submitted_plaintext):
+    """Return True if *submitted_plaintext* matches the stored *stored_password*.
 
-    Returns a string prefixed with ``$hash:`` to distinguish pre-hashed
-    values from plaintext on subsequent reads.
+    Tries three strategies in order:
+
+    1. **bcrypt** — if the stored value starts with ``$2b$`` or ``$2a$``,
+       use ``bcrypt.checkpw`` (only if bcrypt is installed).
+    2. **sha256** — compute ``sha256(plaintext)`` and compare.  An optional
+       ``$hash:`` prefix is stripped first so both plain hex digests and
+       ``$hash:8b7df...`` formats are accepted.
+    3. **plaintext** — direct constant-time comparison of the stored value
+       with the submitted password (fallback for plain-text config).
+
+    All comparisons use ``hmac.compare_digest`` to prevent timing attacks.
     """
-    salt = bcrypt.gensalt() if _USE_BCRYPT else None
-    raw = bcrypt.hashpw(plaintext.encode(), salt).decode() if _USE_BCRYPT else None
-    if raw:
-        return f"$hash:{raw}"
-    h = hashlib.sha256(plaintext.encode()).hexdigest()
-    return f"$hash:{h}"
-
-
-def _check_password(password_hash, plaintext):
-    """Return True if *plaintext* matches the stored *password_hash*.
-
-    Detects the ``$hash:`` prefix: if present the value is treated as an
-    already-derived hash and compared directly; otherwise the plaintext is
-    hashed first and then compared.
-
-    Uses ``bcrypt.checkpw`` when available, falling back to
-    ``hmac.compare_digest`` on the sha256 digests.
-    """
-    if not password_hash or not plaintext:
+    if not stored_password or not submitted_plaintext:
         return False
 
-    if password_hash.startswith("$hash:"):
-        _, stored = password_hash.split(":", 1)
-        # Treat the stored value as a bcrypt hash if it starts with $2b or $2a.
-        if stored.startswith("$2b$") or stored.startswith("$2a$"):
-            if _USE_BCRYPT:
-                return bcrypt.checkpw(plaintext.encode(), stored.encode())
-            else:
-                # Fallback: hash the input the same way and compare.
-                plain_hash = _hash_password(plaintext).split(":", 1)[1]
-                return hmac.compare_digest(plain_hash.encode(), stored.encode())
-        # sha256 fallback
-        plain_hash = _hash_password(plaintext).split(":", 1)[1]
-        return hmac.compare_digest(plain_hash.encode(), stored.encode())
+    # 1. Try bcrypt hash
+    if (stored_password.startswith("$2b$")
+            or stored_password.startswith("$2a$")):
+        if _USE_BCRYPT:
+            return bcrypt.checkpw(
+                submitted_plaintext.encode(), stored_password.encode(),
+            )
+        return False
 
-    # Plaintext password — hash it now.
-    return _check_password(_hash_password(plaintext), plaintext)
+    # 2. Try sha256 hash
+    # Strip optional $hash: prefix
+    inner = stored_password
+    if inner.startswith("$hash:"):
+        inner = inner[6:]
+    sha256_hash = hashlib.sha256(submitted_plaintext.encode()).hexdigest()
+    if hmac.compare_digest(inner, sha256_hash):
+        return True
+
+    # 3. Fall back to plaintext comparison
+    return hmac.compare_digest(stored_password, submitted_plaintext)
 
 
 class AuthStore:
     def __init__(self, password, ttl_seconds, clock=None, token_generator=None):
-        # Store a hashed password (prefixed with "$hash:" for detection).
-        # If the incoming password is already a hash, it passes through unchanged.
-        if password and not password.startswith("$hash:"):
-            self._password_hash = _hash_password(password)
-        else:
-            self._password_hash = password or ""
+        # Store the password exactly as configured.  _check_password
+        # auto-detects the hash type at login time (bcrypt / sha256 /
+        # plaintext).
+        self._password_hash = password or ""
         self._ttl = ttl_seconds
         self._clock = clock or time.time
         self._token_generator = token_generator or secrets.token_urlsafe
@@ -111,7 +112,7 @@ class AuthStore:
     def check_rate_limit(self, client_ip: str = "") -> bool:
         """Return True if the request is allowed (not rate-limited).
 
-        Tracks failed login attempts per source IP. Resets after the window
+        Tracks failed login attempts per source IP.  Resets after the window
         expires and drops the oldest entries below the threshold.
         """
         if not client_ip:
